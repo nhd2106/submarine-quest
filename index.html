@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🌊 Submarine Adventure Quest</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Poppins', sans-serif; background: #060d1f; color: white; overflow-x: hidden; min-height: 100vh; }
+
+    /* Ocean background */
+    .ocean-bg { position: fixed; inset: 0; background: radial-gradient(ellipse at 30% 20%, #0a2a50 0%, #060d1f 60%); z-index: -2; }
+    .wave-bg { position: fixed; bottom: 0; left: 0; right: 0; height: 200px; background: linear-gradient(to top, rgba(0,80,160,0.15), transparent); z-index: -1; }
+
+    /* Bubbles */
+    .bubble { position: fixed; border-radius: 50%; border: 1px solid rgba(100,200,255,0.25); background: rgba(100,200,255,0.04); animation: rise linear infinite; z-index: -1; pointer-events: none; }
+    @keyframes rise { from { transform: translateY(100vh); opacity: 0; } 10% { opacity: 1; } 90% { opacity: 0.4; } to { transform: translateY(-60px); opacity: 0; } }
+
+    /* Header */
+    header { text-align: center; padding: 16px 20px 12px; background: rgba(0,0,0,0.4); border-bottom: 1px solid rgba(255,255,255,0.06); }
+    h1 { font-size: clamp(1.3rem, 4vw, 2rem); font-weight: 900; background: linear-gradient(135deg, #00d4ff, #0099ff, #7b2fff); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+    .subtitle { color: rgba(255,255,255,0.35); font-size: 0.8rem; margin-top: 2px; }
+
+    /* Score bar */
+    .scores { display: flex; justify-content: center; gap: 10px; padding: 10px 16px; background: rgba(0,0,0,0.3); flex-wrap: wrap; border-bottom: 1px solid rgba(255,255,255,0.04); }
+    .score-card { display: flex; align-items: center; gap: 8px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 6px 14px; }
+    .team-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+    .score-name { font-weight: 700; font-size: 0.8rem; }
+    .score-pos { font-size: 0.7rem; color: rgba(255,255,255,0.4); }
+
+    /* Board */
+    .game-wrap { max-width: 860px; margin: 16px auto; padding: 0 12px; }
+    .board { background: rgba(0,25,60,0.7); border: 1px solid rgba(0,150,255,0.2); border-radius: 20px; padding: 14px; box-shadow: 0 0 60px rgba(0,80,255,0.1); backdrop-filter: blur(8px); }
+
+    /* Path grid 7×3 */
+    .path-grid { display: grid; grid-template-columns: repeat(7, 1fr); grid-template-rows: repeat(3, 1fr); gap: 6px; }
+
+    /* Cells */
+    .cell { border-radius: 10px; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding: 6px 4px 4px; position: relative; min-height: 74px; transition: box-shadow 0.3s; }
+    .cell.path { background: rgba(0,80,180,0.18); border: 1px solid rgba(0,130,255,0.22); }
+    .cell.obstacle { background: rgba(255,90,0,0.12); border: 1px solid rgba(255,140,0,0.45); animation: obs-pulse 2.5s ease-in-out infinite; }
+    @keyframes obs-pulse { 0%,100%{box-shadow:0 0 0 0 rgba(255,140,0,0.2);} 50%{box-shadow:0 0 0 6px rgba(255,140,0,0);} }
+    .cell.start-cell { background: rgba(0,180,80,0.12); border: 1px solid rgba(0,210,100,0.35); }
+    .cell.treasure-cell { background: rgba(255,200,0,0.12); border: 2px solid rgba(255,200,0,0.5); animation: treas-glow 1.8s ease-in-out infinite; }
+    @keyframes treas-glow { 0%,100%{box-shadow:0 0 8px rgba(255,200,0,0.2);} 50%{box-shadow:0 0 24px rgba(255,200,0,0.5);} }
+    .cell.empty { background: transparent; border: none; }
+
+    .cell-num { font-size: 0.55rem; color: rgba(255,255,255,0.3); position: absolute; top: 3px; left: 5px; font-weight: 600; }
+    .cell-icon { font-size: clamp(1.1rem, 2.5vw, 1.5rem); line-height: 1; margin-top: 4px; }
+    .cell-label { font-size: 0.5rem; color: rgba(255,200,100,0.75); font-weight: 700; margin-top: 1px; letter-spacing: 0.02em; }
+
+    /* Subs row */
+    .subs-row { display: flex; flex-wrap: wrap; gap: 1px; justify-content: center; margin-top: 3px; min-height: 20px; }
+    .sub-token { font-size: clamp(0.9rem, 2vw, 1.15rem); line-height: 1; filter: drop-shadow(0 1px 3px rgba(0,0,0,0.6)); transition: transform 0.35s cubic-bezier(0.34,1.56,0.64,1); }
+    .sub-token.just-moved { animation: pop 0.4s ease; }
+    @keyframes pop { 0%{transform:scale(0.5);} 60%{transform:scale(1.3);} 100%{transform:scale(1);} }
+
+    /* Ocean decor cells */
+    .ocean-deco { font-size: clamp(1rem,2.5vw,1.6rem); opacity: 0.18; }
+
+    /* Controls */
+    .controls { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; max-width: 860px; margin: 12px auto 20px; padding: 0 12px; }
+    .team-ctrl { border-radius: 14px; padding: 12px 14px; display: flex; align-items: center; gap: 10px; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.03); }
+    .team-label { flex: 1; text-align: center; }
+    .team-label-name { font-weight: 800; font-size: 0.85rem; }
+    .team-label-step { font-size: 0.65rem; color: rgba(255,255,255,0.35); }
+    .move-btn { width: 46px; height: 46px; border-radius: 12px; border: none; font-size: 1.25rem; cursor: pointer; transition: all 0.18s; display: flex; align-items: center; justify-content: center; font-weight: 900; }
+    .move-btn:hover:not(:disabled) { transform: scale(1.12); }
+    .move-btn:active:not(:disabled) { transform: scale(0.93); }
+    .move-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+    .btn-fwd { background: linear-gradient(135deg,#00b4d8,#0077b6); color: white; box-shadow: 0 3px 12px rgba(0,180,216,0.35); }
+    .btn-bwd { background: linear-gradient(135deg,#e63946,#c1121f); color: white; box-shadow: 0 3px 12px rgba(230,57,70,0.35); }
+
+    /* Modal */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.88); backdrop-filter: blur(10px); z-index: 100; display: flex; align-items: center; justify-content: center; padding: 16px; opacity: 0; pointer-events: none; transition: opacity 0.25s; }
+    .modal-overlay.active { opacity: 1; pointer-events: all; }
+    .modal { background: linear-gradient(145deg, #091a35, #0d2137); border: 2px solid rgba(255,140,0,0.4); border-radius: 22px; padding: 28px; max-width: 540px; width: 100%; box-shadow: 0 0 60px rgba(255,120,0,0.18); transform: scale(0.82); transition: transform 0.3s cubic-bezier(0.34,1.56,0.64,1); }
+    .modal-overlay.active .modal { transform: scale(1); }
+    .modal-badge { display: inline-flex; align-items: center; gap: 6px; background: rgba(255,140,0,0.15); border: 1px solid rgba(255,140,0,0.35); color: #ffaa00; font-size: 0.75rem; font-weight: 700; padding: 4px 12px; border-radius: 99px; margin-bottom: 12px; }
+    .modal-team { font-size: 0.8rem; color: rgba(255,255,255,0.45); margin-bottom: 12px; }
+    .modal-q { font-size: clamp(0.95rem,2.5vw,1.15rem); font-weight: 600; margin-bottom: 20px; line-height: 1.55; color: #e8f4fd; }
+    .opts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 16px; }
+    .opt-btn { padding: 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.09); background: rgba(255,255,255,0.04); color: white; cursor: pointer; font-family: 'Poppins',sans-serif; font-size: 0.83rem; transition: all 0.18s; text-align: left; line-height: 1.35; }
+    .opt-btn:hover:not(:disabled) { background: rgba(255,255,255,0.1); border-color: rgba(0,180,216,0.4); }
+    .opt-btn:disabled { cursor: default; }
+    .opt-btn.correct { background: rgba(0,200,100,0.18); border-color: #00c864; color: #00e87a; }
+    .opt-btn.wrong { background: rgba(220,50,50,0.18); border-color: #dc3232; color: #ff7070; }
+    .modal-result { display: none; text-align: center; padding: 12px 16px; border-radius: 10px; font-weight: 700; font-size: 0.95rem; margin-bottom: 14px; }
+    .modal-result.ok { display: block; background: rgba(0,200,100,0.12); border: 1px solid rgba(0,200,100,0.35); color: #00e87a; }
+    .modal-result.bad { display: block; background: rgba(220,50,50,0.12); border: 1px solid rgba(220,50,50,0.35); color: #ff7070; }
+    .cont-btn { width: 100%; padding: 13px; border-radius: 11px; border: none; background: linear-gradient(135deg,#0077b6,#00b4d8); color: white; font-family: 'Poppins',sans-serif; font-size: 0.95rem; font-weight: 700; cursor: pointer; display: none; transition: all 0.18s; }
+    .cont-btn:hover { opacity: 0.9; transform: translateY(-1px); }
+
+    /* Win overlay */
+    .win-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.93); z-index: 200; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 16px; opacity: 0; pointer-events: none; transition: opacity 0.5s; }
+    .win-overlay.active { opacity: 1; pointer-events: all; }
+    .win-trophy { font-size: 5rem; animation: bounce 0.6s ease infinite alternate; }
+    @keyframes bounce { from{transform:scale(1) rotate(-5deg);} to{transform:scale(1.1) rotate(5deg);} }
+    .win-msg { font-size: clamp(1.5rem,5vw,2.5rem); font-weight: 900; text-align: center; line-height: 1.3; }
+    .win-sub { color: rgba(255,255,255,0.4); font-size: 0.9rem; }
+    .reset-btn { padding: 14px 36px; border-radius: 14px; border: none; background: linear-gradient(135deg,#f43f5e,#c026d3); color: white; font-family: 'Poppins',sans-serif; font-size: 1rem; font-weight: 700; cursor: pointer; transition: all 0.2s; margin-top: 8px; }
+    .reset-btn:hover { transform: scale(1.05); box-shadow: 0 0 30px rgba(244,63,94,0.4); }
+
+    @media(max-width:600px) {
+      .controls { grid-template-columns: 1fr; }
+      .opts { grid-template-columns: 1fr; }
+      .cell { min-height: 58px; }
+      .move-btn { width: 40px; height: 40px; font-size: 1.1rem; }
+    }
+  </style>
+</head>
+<body>
+<div class="ocean-bg"></div>
+<div class="wave-bg"></div>
+<div id="bubbles"></div>
+
+<!-- Win Screen -->
+<div class="win-overlay" id="winOverlay">
+  <div class="win-trophy">🏆</div>
+  <div class="win-msg" id="winMsg"></div>
+  <div class="win-sub">found the treasure first! Amazing!</div>
+  <button class="reset-btn" onclick="resetGame()">🔄 Play Again</button>
+</div>
+
+<!-- Question Modal -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <div class="modal-badge">⚠️ OBSTACLE CHALLENGE!</div>
+    <div class="modal-team" id="mTeam"></div>
+    <div class="modal-q" id="mQ"></div>
+    <div class="opts" id="mOpts"></div>
+    <div class="modal-result" id="mResult"></div>
+    <button class="cont-btn" id="contBtn" onclick="closeModal()">Continue ▶</button>
+  </div>
+</div>
+
+<!-- Header -->
+<header>
+  <h1>🌊 Submarine Adventure Quest 🌊</h1>
+  <div class="subtitle">English Adventure Presentation — Race your submarine to the treasure! 💰</div>
+</header>
+
+<div class="scores" id="scoresBar"></div>
+
+<div class="game-wrap">
+  <div class="board">
+    <div class="path-grid" id="pathGrid"></div>
+  </div>
+</div>
+
+<div class="controls" id="ctrlGrid"></div>
+
+<script>
+// ── CONFIG ──────────────────────────────────────
+const TEAMS = [
+  { name:"Team 1", color:"#e74c3c", sub:"🔴" },
+  { name:"Team 2", color:"#3498db", sub:"🔵" },
+  { name:"Team 3", color:"#2ecc71", sub:"🟢" },
+  { name:"Team 4", color:"#f39c12", sub:"🟡" },
+];
+
+// Path as [col, row] on a 7-col × 3-row grid
+// Index 0 = START, index 20 = TREASURE
+const PATH = [
+  [0,2],                                           // 0 START
+  [1,2],[2,2],[3,2],[4,2],[5,2],[6,2],             // 1-6  bottom L→R
+  [6,1],[5,1],[4,1],[3,1],[2,1],[1,1],[0,1],       // 7-13 middle R→L
+  [0,0],[1,0],[2,0],[3,0],[4,0],[5,0],[6,0],       // 14-20 top L→R (20=TREASURE)
+];
+const TOTAL = PATH.length - 1; // = 20
+const OBSTACLES = new Set([3,7,11,16]);
+const OCEAN_DECOS = ['🐟','🐠','🌿','🪸','🦑','🐙','🦀','🐡','🌊','🐬'];
+
+// ── QUESTIONS ───────────────────────────────────
+const Qs = [
+  { q:"What does 'expedition' mean?",
+    opts:["A long journey of exploration","A type of underwater plant","Diving equipment","A treasure map"], ans:0 },
+  { q:"Choose the correct sentence:",
+    opts:['"The explorer has discovered a cave last year"','"The explorer discovered a cave last year"','"The explorer discover a cave last year"','"The explorer is discovered a cave last year"'], ans:1 },
+  { q:"What is the opposite of 'dangerous'?",
+    opts:["Risky","Thrilling","Safe","Exciting"], ans:2 },
+  { q:"Fill in the blank: 'The adventurer was ___ by the beautiful landscape.'",
+    opts:["amazed","amaze","amazing","amazement"], ans:0 },
+  { q:"Which word means 'to explore an unknown area'?",
+    opts:["Navigate","Venture","Capture","Retreat"], ans:1 },
+  { q:"What does 'treacherous' mean in an adventure context?",
+    opts:["Very beautiful","Extremely dangerous","Very boring","Very fast"], ans:1 },
+  { q:"Choose the correct past tense: 'The diver ___ deep into the ocean.'",
+    opts:["dive","dived","diving","dives"], ans:1 },
+  { q:"What is a 'voyage'?",
+    opts:["A type of submarine","A long journey by sea or space","An underwater cave","A treasure chest"], ans:1 },
+  { q:"Which sentence uses 'despite' correctly?",
+    opts:['"Despite the storm, they continued sailing"','"Despite they were afraid, continued"','"They continued despite the sailing storm was"','"Despite of the storm they sailing"'], ans:0 },
+  { q:"What does 'navigate' mean?",
+    opts:["To be afraid","To find your way through an area","To dive underwater","To discover treasure"], ans:1 },
+  { q:"Adventurers who explore oceans are called:",
+    opts:["Pilots","Astronauts","Marine explorers / Divers","Mountaineers"], ans:2 },
+  { q:"Complete: 'If they had a map, they ___ found the treasure.'",
+    opts:["will have","would have","would","had"], ans:1 },
+  { q:"Which word is a synonym for 'brave'?",
+    opts:["Timid","Cowardly","Fearful","Courageous"], ans:3 },
+  { q:"What does 'uncharted territory' mean?",
+    opts:["A place on a chart","A familiar area","An unexplored, unknown area","A type of map"], ans:2 },
+  { q:"The explorers ___ the summit after three days of climbing.",
+    opts:["reached","reaches","reaching","reach"], ans:0 },
+  { q:"Which word best describes an adventurer's spirit?",
+    opts:["Timid","Cautious","Daring","Lazy"], ans:2 },
+  { q:"'The crew set ___ on their ocean adventure.' Which word fits?",
+    opts:["off","of","on","out"], ans:0 },
+  { q:"What is 'marine' related to?",
+    opts:["Mountains","Deserts","Oceans and sea","Forests"], ans:2 },
+];
+
+// ── STATE ────────────────────────────────────────
+let pos = [0,0,0,0];
+let usedQ = new Set();
+let modal = null;
+let over = false;
+
+// ── BUILD GRID ───────────────────────────────────
+function buildGrid() {
+  const grid = document.getElementById('pathGrid');
+  grid.innerHTML = '';
+  // map [col,row] → path index
+  const map = {};
+  PATH.forEach((p,i) => { map[`${p[0]},${p[1]}`] = i; });
+
+  for (let row=0; row<3; row++) {
+    for (let col=0; col<7; col++) {
+      const key = `${col},${row}`;
+      const div = document.createElement('div');
+      div.className = 'cell';
+      div.id = `c${col}-${row}`;
+
+      if (key in map) {
+        const idx = map[key];
+        if (idx === 0) {
+          div.classList.add('path','start-cell');
+          div.innerHTML = `<div class="cell-icon">🏁</div><div class="cell-label">START</div><div class="subs-row" id="s0"></div>`;
+        } else if (idx === TOTAL) {
+          div.classList.add('path','treasure-cell');
+          div.innerHTML = `<div class="cell-icon">💰</div><div class="cell-label">TREASURE</div><div class="subs-row" id="s${TOTAL}"></div>`;
+        } else if (OBSTACLES.has(idx)) {
+          div.classList.add('path','obstacle');
+          div.innerHTML = `<div class="cell-num">${idx}</div><div class="cell-icon">⚠️</div><div class="cell-label">CHALLENGE</div><div class="subs-row" id="s${idx}"></div>`;
+        } else {
+          div.classList.add('path');
+          div.innerHTML = `<div class="cell-num">${idx}</div><div class="subs-row" id="s${idx}"></div>`;
+        }
+      } else {
+        div.classList.add('empty');
+        const d = OCEAN_DECOS[Math.floor(Math.random()*OCEAN_DECOS.length)];
+        if (Math.random() < 0.6) div.innerHTML = `<div class="ocean-deco">${d}</div>`;
+      }
+      grid.appendChild(div);
+    }
+  }
+}
+
+// ── RENDER SUBS ──────────────────────────────────
+function renderSubs(moved) {
+  document.querySelectorAll('.subs-row').forEach(el => el.innerHTML = '');
+  pos.forEach((p, i) => {
+    const row = document.getElementById(`s${p}`);
+    if (!row) return;
+    const span = document.createElement('span');
+    span.className = 'sub-token' + (moved===i ? ' just-moved' : '');
+    span.title = TEAMS[i].name;
+    span.innerHTML = `<span style="filter:drop-shadow(0 0 5px ${TEAMS[i].color})">${TEAMS[i].sub}</span>`;
+    row.appendChild(span);
+  });
+}
+
+// ── RENDER SCORES ─────────────────────────────────
+function renderScores() {
+  document.getElementById('scoresBar').innerHTML = TEAMS.map((t,i) => `
+    <div class="score-card" style="border-color:${t.color}30">
+      <div class="team-dot" style="background:${t.color}"></div>
+      <div>
+        <div class="score-name" style="color:${t.color}">${t.name}</div>
+        <div class="score-pos">Step ${pos[i]} / ${TOTAL}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+// ── RENDER CONTROLS ───────────────────────────────
+function renderControls() {
+  document.getElementById('ctrlGrid').innerHTML = TEAMS.map((t,i) => `
+    <div class="team-ctrl" style="border-color:${t.color}25">
+      <button class="move-btn btn-bwd" onclick="move(${i},-1)" ${over?'disabled':''} title="Move back">◀</button>
+      <div class="team-label">
+        <div class="team-label-name" style="color:${t.color}">${t.sub} ${t.name}</div>
+        <div class="team-label-step">Step ${pos[i]} / ${TOTAL}</div>
+      </div>
+      <button class="move-btn btn-fwd" onclick="move(${i},1)" ${over?'disabled':''} title="Move forward">▶</button>
+    </div>
+  `).join('');
+}
+
+// ── MOVE ─────────────────────────────────────────
+function move(ti, dir) {
+  if (over) return;
+  const np = Math.max(0, Math.min(TOTAL, pos[ti] + dir));
+  pos[ti] = np;
+  renderSubs(ti);
+  renderScores();
+  renderControls();
+
+  if (np === TOTAL) { setTimeout(() => showWin(ti), 350); return; }
+  if (dir > 0 && OBSTACLES.has(np)) setTimeout(() => showQuestion(ti), 400);
+}
+
+// ── QUESTION ──────────────────────────────────────
+function showQuestion(ti) {
+  let avail = Qs.map((_,i)=>i).filter(i=>!usedQ.has(i));
+  if (!avail.length) { usedQ.clear(); avail = Qs.map((_,i)=>i); }
+  const qi = avail[Math.floor(Math.random()*avail.length)];
+  usedQ.add(qi);
+  const q = Qs[qi];
+  modal = { ti, qi, answered: false, moveBack: false };
+
+  document.getElementById('mTeam').textContent = `${TEAMS[ti].sub} ${TEAMS[ti].name} — Answer correctly to stay safe!`;
+  document.getElementById('mQ').textContent = q.q;
+  document.getElementById('mResult').className = 'modal-result';
+  document.getElementById('mResult').textContent = '';
+  document.getElementById('contBtn').style.display = 'none';
+
+  document.getElementById('mOpts').innerHTML = q.opts.map((o,i) => `
+    <button class="opt-btn" onclick="checkAns(${i},${q.ans},${ti})">${o}</button>
+  `).join('');
+
+  document.getElementById('modalOverlay').classList.add('active');
+}
+
+function checkAns(chosen, correct, ti) {
+  if (!modal || modal.answered) return;
+  modal.answered = true;
+
+  document.querySelectorAll('.opt-btn').forEach((b,i) => {
+    b.disabled = true;
+    if (i === correct) b.classList.add('correct');
+    else if (i === chosen) b.classList.add('wrong');
+  });
+
+  const res = document.getElementById('mResult');
+  const btn = document.getElementById('contBtn');
+  btn.style.display = 'block';
+
+  if (chosen === correct) {
+    res.className = 'modal-result ok';
+    res.textContent = '✅ Correct! Your submarine is safe — keep sailing! 🚢';
+    btn.textContent = 'Continue sailing ▶';
+  } else {
+    res.className = 'modal-result bad';
+    res.textContent = `❌ Wrong! Move back 1 step! Correct answer: option ${correct+1}`;
+    btn.textContent = 'Move back ◀';
+    modal.moveBack = true;
+  }
+}
+
+function closeModal() {
+  document.getElementById('modalOverlay').classList.remove('active');
+  if (modal?.moveBack) {
+    pos[modal.ti] = Math.max(0, pos[modal.ti] - 1);
+    renderSubs(modal.ti);
+    renderScores();
+    renderControls();
+  }
+  modal = null;
+}
+
+// ── WIN ───────────────────────────────────────────
+function showWin(ti) {
+  over = true;
+  const t = TEAMS[ti];
+  document.getElementById('winMsg').innerHTML =
+    `<span style="color:${t.color}">${t.sub} ${t.name}</span><br>found the treasure!`;
+  document.getElementById('winOverlay').classList.add('active');
+  confetti();
+  renderControls();
+}
+
+function resetGame() {
+  pos = [0,0,0,0]; usedQ.clear(); over = false;
+  document.getElementById('winOverlay').classList.remove('active');
+  buildGrid(); renderSubs(); renderScores(); renderControls();
+}
+
+// ── BUBBLES ───────────────────────────────────────
+function makeBubbles() {
+  const c = document.getElementById('bubbles');
+  for (let i=0; i<22; i++) {
+    const b = document.createElement('div');
+    b.className = 'bubble';
+    const s = Math.random()*18+4;
+    b.style.cssText = `width:${s}px;height:${s}px;left:${Math.random()*100}vw;bottom:-50px;animation-duration:${Math.random()*12+8}s;animation-delay:${Math.random()*10}s;`;
+    c.appendChild(b);
+  }
+}
+
+// ── CONFETTI ──────────────────────────────────────
+function confetti() {
+  const icons = ['🌟','⭐','✨','💫','🎉','🏆','💎','🪙','🚢','💰'];
+  const style = document.createElement('style');
+  style.textContent = `@keyframes cf{from{transform:translateY(0) rotate(0);}to{transform:translateY(110vh) rotate(720deg);opacity:0;}}`;
+  document.head.appendChild(style);
+  for (let i=0;i<28;i++) {
+    const el = document.createElement('div');
+    el.style.cssText = `position:fixed;font-size:${1+Math.random()*1.5}rem;left:${Math.random()*100}vw;top:-60px;animation:cf ${2+Math.random()*2}s ease-in forwards;animation-delay:${Math.random()}s;z-index:201;`;
+    el.textContent = icons[Math.floor(Math.random()*icons.length)];
+    document.body.appendChild(el);
+    setTimeout(()=>el.remove(), 4200);
+  }
+}
+
+// ── INIT ──────────────────────────────────────────
+makeBubbles();
+buildGrid();
+renderSubs();
+renderScores();
+renderControls();
+</script>
+</body>
+</html>
